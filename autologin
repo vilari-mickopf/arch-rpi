@@ -1,0 +1,11 @@
+#!/bin/sh
+
+sudo cp /usr/lib/systemd/system/getty@.service /etc/systemd/system/autologin@.service
+sudo ln -s /etc/systemd/system/autologin@.service /etc/systemd/system/getty.target.wants/getty@tty1.service
+
+USER=pi
+sed -i "s/^ExecStart=.*/ExecStart=-\/sbin\/agetty -a $USER %I \$TERM/g" /etc/systemd/system/getty.target.wants/getty@tty1.service
+
+systemctl daemon-reload
+systemctl start getty@tty1.service
+systemctl enable getty@tty1.service

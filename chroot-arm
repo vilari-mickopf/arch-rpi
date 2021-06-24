@@ -1,0 +1,83 @@
+#!/bin/bash
+
+trap "exit" INT
+
+
+# Run lsblk to see proper SD path
+SD_CARD=/dev/mmcblk0
+# Get partition names
+if [[ ${SD_CARD: -1} != [0-9] ]] ; then
+    BOOT=$SD_CARD"1"
+    ROOT=$SD_CARD"2"
+else
+    BOOT=$SD_CARD"p1"
+    ROOT=$SD_CARD"p2"
+fi
+
+
+MOUNTPOINT=/mnt/raspberry/root
+
+QEMU_ARCH=qemu-aarch64-static
+
+
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+RESET='\033[0m'
+
+
+echo -e "${BLUE}Mounting ${YELLOW}${ROOT} ${BLUE}on ${YELLOW}${MOUNTPOINT}${RESET}..."
+sudo mount $ROOT $MOUNTPOINT
+[[ $? != 0 ]] && echo -e "${RED}Mounting failed.${RESET}" && exit
+sudo mount $BOOT $MOUNTPOINT/boot
+[[ $? != 0 ]] && echo -e "${RED}Mounting failed.${RESET}" && exit
+echo -e "${GREEN}Done.${RESET}"
+echo
+
+printf "${BLUE}Copying qemu to ${YELLOW}${MOUNTPOINT}/usr/bin${RESET}..."
+sudo cp /usr/bin/$QEMU_ARCH $MOUNTPOINT/usr/bin/
+[[ $? != 0 ]] && echo -e "${RED}Copying failed.${RESET}" && exit
+echo -e "${GREEN}Done.${RESET}"
+
+printf "${BLUE}Setting resolv.conf${RESET}..."
+sudo mv $MOUNTPOINT/etc/resolv.conf $MOUNTPOINT/etc/resolv.conf.bak
+[[ $? != 0 ]] && echo -e "${RED}Setting resolv failed.${RESET}" && exit
+sudo cp /etc/resolv.conf $MOUNTPOINT/etc/resolv.conf
+[[ $? != 0 ]] && echo -e "${RED}Setting resolv failed.${RESET}" && exit
+echo -e "${GREEN}Done.${RESET}"
+
+printf "${BLUE}Binding /sys /proc /dev${RESET}..."
+sudo mount -t sysfs none $MOUNTPOINT/sys
+[[ $? != 0 ]] && echo -e "${RED}Binding sys failed.${RESET}" && exit
+sudo mount -t proc none $MOUNTPOINT/proc
+[[ $? != 0 ]] && echo -e "${RED}Binding proc failed.${RESET}" && exit
+sudo mount -o bind /dev $MOUNTPOINT/dev
+[[ $? != 0 ]] && echo -e "${RED}Binding dev failed.${RESET}" && exit
+echo -e "${GREEN}Done.${RESET}"
+
+echo
+echo -e "${BLUE}Chrooting:${RESET}"
+sudo chroot $MOUNTPOINT/ /bin/bash
+echo
+
+echo -e "${BLUE}Cleaning up:${RESET}"
+printf "${BLUE}Umounting /sys /proc /dev from ${YELLOW}${MOUNTPOINT}${RESET}..."
+sudo umount $MOUNTPOINT/sys
+sudo umount $MOUNTPOINT/proc
+sudo umount $MOUNTPOINT/dev
+echo -e "${GREEN}Done.${RESET}"
+
+printf "${BLUE}Removing qemu from ${YELLOW}${MOUNTPOINT}/usr/bin/${RESET}..."
+sudo rm $MOUNTPOINT/usr/bin/$QEMU_ARCH
+echo -e "${GREEN}Done.${RESET}"
+
+printf "${BLUE}Restoring resolv.conf${RESET}..."
+sudo mv $MOUNTPOINT/etc/resolv.conf.bak $MOUNTPOINT/etc/resolv.conf
+echo -e "${GREEN}Done.${RESET}"
+
+printf "${BLUE}Umounting ${YELLOW}${MOUNTPOINT}${RESET}..."
+sudo umount $MOUNTPOINT/boot
+sudo umount $MOUNTPOINT
+echo -e "${GREEN}Done.${RESET}"
+echo

@@ -1,0 +1,91 @@
+#! /bin/bash
+
+trap "exit" INT
+
+
+# Link to arch linux image
+# Raspberry 1
+# LINK=http://os.archlinuxarm.org/os/ArchLinuxARM-rpi-latest.tar.gz
+# Raspberry 2
+# LINK=http://os.archlinuxarm.org/os/ArchLinuxARM-rpi-2-latest.tar.gz
+# Raspberry 3
+# LINK=http://os.archlinuxarm.org/os/ArchLinuxARM-rpi-3-latest.tar.gz
+# Raspberry 4
+LINK=http://os.archlinuxarm.org/os/ArchLinuxARM-rpi-4-latest.tar.gz
+
+MOUNTPOINT=/mnt/raspberry/
+
+# Run lsblk to see proper SD path
+SD_CARD=/dev/mmcblk0
+
+# Get partition names
+if [[ ${SD_CARD: -1} != [0-9] ]] ; then
+    BOOT=$SD_CARD"1"
+    ROOT=$SD_CARD"2"
+else
+    BOOT=$SD_CARD"p1"
+    ROOT=$SD_CARD"p2"
+fi
+
+
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+GREEN='\033[0;32m'
+RESET='\033[0m'
+
+
+echo -e "${BLUE}Wipe ${YELLOW}${SD_CARD}${RESET}:"
+sudo wipefs -a $SD_CARD
+echo
+
+printf "${BLUE}Create the partition table for ${YELLOW}${SD_CARD}${RESET}..."
+sudo parted $SD_CARD --script -- mklabel msdos
+echo -e "${GREEN}Done.${RESET}"
+
+printf "${BLUE}Fat32 boot partition with 128 MB and bootable flag${RESET}..."
+sudo parted $SD_CARD --script -- mkpart primary fat32 1 128
+sudo parted $SD_CARD --script -- set 1 boot on
+echo -e "${GREEN}Done.${RESET}"
+
+printf "${BLUE}Ext4 root partition that takes the rest of the SD${RESET}..."
+sudo parted $SD_CARD --script -- mkpart primary ext4 128 100%
+echo -e "${GREEN}Done.${RESET}"
+
+echo
+
+echo -e "${BLUE}Partitions:${RESET}"
+sudo parted $SD_CARD --script print
+echo
+
+echo -e "${BLUE}Format and mount partitions:${RESET}"
+sudo mkfs.vfat -F32 $BOOT
+sudo mkfs.ext4 -F $ROOT
+sudo sync $SD_CARD
+
+sudo mkdir -p $MOUNTPOINT/boot
+sudo mkdir -p $MOUNTPOINT/root
+sudo mount $BOOT $MOUNTPOINT/boot
+sudo mount $ROOT $MOUNTPOINT/root
+echo
+
+echo -e "${BLUE}Getting image file:${RESET}"
+wget -O- $LINK | sudo tar -xz -C $MOUNTPOINT/root
+echo
+
+printf "${BLUE}Syncing${RESET}..."
+sudo sync $SD_CARD
+echo -e "${GREEN}Done.${RESET}"
+
+printf "${BLUE}Copying files to boot${RESET}..."
+sudo mv $MOUNTPOINT/root/boot/* $MOUNTPOINT/boot
+echo -e "${GREEN}Done.${RESET}"
+
+printf "${BLUE}Umounting${RESET}..."
+sudo umount $MOUNTPOINT/root $MOUNTPOINT/boot
+echo -e "${GREEN}Done.${RESET}"
+
+echo
+echo -e "${YELLOW}The default username is alarm, and the password is alarm.${RESET}"
+echo -e "${YELLOW}This user has sudo privileges.${RESET}"
+echo -e "${YELLOW}You can also log in as root with password root.${RESET}"
+echo

@@ -1,0 +1,31 @@
+#! /bin/sh
+
+NEW_NAME=pi
+
+usermod -l $NEW_NAME alarm
+
+echo 'raspberry' > /etc/hostname
+usermod -l $NEW_NAME alarm
+mkdir -p /home/$NEW_NAME
+sudo chmod ugo+rwx /home/$NEW_NAME
+usermod -d /home/$NEW_NAME -m $NEW_NAME
+rm -rf /home/alarm
+
+# Initialize the pacman keyring and populate the package signing keys
+pacman-key --init
+pacman-key --populate archlinuxarm
+
+pacman -Syu
+pacman -S base-devel
+
+pacman -S git
+git clone https://aur.archlinux.org/yay.git ~/yay
+cd ~/yay
+makepkg -si
+cd
+rm -rf ~/yay
+
+pacman -S python python-pip
+pacman -S neovim python-neovim xclip
+
+pacman -S alsa pulseaudio alsa-utils pulseaudio-alsa pulseaudio-rtp
